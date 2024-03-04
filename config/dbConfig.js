@@ -3,12 +3,7 @@ import "dotenv/config";
 
 export const connectDB = () => {
     mongoose
-        .connect(process.env.DB_URL, {
-            useNewUrlParser: true,
-            useCreateIndex: true,
-            useFindAndModify: false,
-            useUnifiedTopology: true
-        })
+        .connect(process.env.DB_URL)
         .then(() => {
             console.log("Connected to MongoDB");
             run();
