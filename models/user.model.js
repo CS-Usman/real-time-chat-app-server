@@ -57,6 +57,15 @@ export const userSchema = mongoose.Schema(
     otpExpiryTime: {
       type: Date,
     },
+    socketId: {
+      type: String,
+    },
+    friends: [
+      {
+        type: mongoose.Schema.ObjectId,
+        ref: "User",
+      },
+    ],
   },
   { timestamps: true }
 );
@@ -92,11 +101,11 @@ userSchema.methods.changedPasswordAfter = function (JWTTimeStamp) {
   return JWTTimeStamp < this.passwordChangedAt;
 };
 
-userSchema.pre("save", function (next) {
+userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
 
-  this.password = bcrypt.hash(this.password, 12);
-
+  this.password = await bcrypt.hash(this.password, 12);
+  this.passwordConfirm = this.password;
   this.passwordChangedAt = Date.now() - 1000;
   next();
 });

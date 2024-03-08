@@ -1,23 +1,35 @@
 import User from "../models/user.model.js";
 import ErrorResponse from "../utils/errorResponse.js";
+import { filterObj } from "../utils/filterObj.js";
 
-export const getAllUsers = async (req, res, next) => {
-    console.log(req.user);
-    const keyword = req.query.search ? {
-        $or: [
-            { name: { $regex: req.query.search, $options: "i" } },
-            { email: { $regex: req.query.search, $options: "i" } },
-        ],
-    } : {};
+export const updateMe = async (req, res, next) => {
+  const filteredBody = filterObj(
+    req.body,
+    "firstName",
+    "lastName",
+    "about",
+    "avatar"
+  );
 
-    try {
-        const users = await User.find(keyword).find({
-            _id: { $ne: req.user._id }
-        });
-        console.log(users);
-        res.send(users);
-    } catch (error) {
-        return next(new ErrorResponse(error, 500));
+  const { user } = req;
 
-    }
-}
+  try {
+    const updatedUser = await User.findByIdAndUpdate(
+      user._id,
+      {
+        filteredBody,
+      },
+      {
+        new: true,
+        validateModifiedOnly: true,
+      }
+    );
+    res.status(200).json({
+      success: true,
+      message: "User updated successfully",
+      data: updatedUser,
+    });
+  } catch (error) {
+    return next(new ErrorResponse(error, 500));
+  }
+};

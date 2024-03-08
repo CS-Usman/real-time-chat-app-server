@@ -1,10 +1,10 @@
 import User from "../models/user.model.js";
 import ErrorResponse from "../utils/errorResponse.js";
-import bcrypt from "bcrypt";
 import { generateToken } from "../utils/generateToken.js";
 import { filterObj } from "../utils/filterObj.js";
 import otpGenerator from "otp-generator";
 import crypto from "crypto";
+import { sendEmail } from "../services/mailer.service.js";
 
 export const login = async (req, res, next) => {
   const { email, password } = req.body;
@@ -45,6 +45,8 @@ export const signUp = async (req, res, next) => {
     "password"
   );
 
+  console.log(filteredBody);
+
   if (!email && !firstName && !lastName && !password) {
     return next(
       new ErrorResponse(
@@ -74,10 +76,8 @@ export const signUp = async (req, res, next) => {
       req.userId = existingUser._id;
       next();
     } else {
-      const hashedPassword = await bcrypt.hash(password, 10);
-
       const newUser = await User.create(filteredBody);
-      req.userId = existingUser._id;
+      req.userId = newUser._id;
       next();
     }
 
@@ -90,7 +90,7 @@ export const signUp = async (req, res, next) => {
 export const sendOTP = async (req, res, next) => {
   const { userId } = req;
 
-  const newOt = otpGenerator.generate(6, {
+  const newOtp = otpGenerator.generate(6, {
     lowerCaseAlphabets: false,
     upperCaseAlphabets: false,
     specialChars: false,
@@ -98,14 +98,36 @@ export const sendOTP = async (req, res, next) => {
 
   const otpExpiryTime = Date.now() + 10 * 60 * 1000; // 10 mins
 
-  await User.findByIdAndUpdate(userId, { otpExpiryTime: otpExpiryTime });
+  try {
+    const user = await User.findByIdAndUpdate(userId, {
+      otpExpiryTime: otpExpiryTime,
+    });
 
-  // TODO Send Email
+    user.otp = newOtp.toString();
 
-  res.status(200).json({
-    success: true,
-    message: "OTP Sent Sucessfully",
-  });
+    await user.save({ new: true, validateModifiedOnly: true });
+
+    console.log(newOtp);
+
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "Verification OTP",
+        text: `Your OTP is ${newOtp}.This is valid for 10 mins`,
+      });
+    } catch (error) {
+      return next(
+        new ErrorResponse(`Error sending mail : ${error.message}`, 500)
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "OTP Sent Sucessfully",
+    });
+  } catch (error) {
+    return next(new ErrorResponse(`Server error : ${error.message}`, 500));
+  }
 };
 
 export const verifyOTP = async (req, res, next) => {
@@ -146,7 +168,7 @@ export const verifyOTP = async (req, res, next) => {
   res.status(200).json({
     success: true,
     message: "OTP verified successfully",
-    token: generateToken(foundUser._id),
+    token: generateToken(user._id),
     data: {
       userId: user._id,
     },
@@ -163,10 +185,21 @@ export const forgotPassword = async (req, res, next) => {
     );
   }
 
-  const resetToken = user.createPasswordResetToken();
-  const resetUrl = `http://localhost:3001/users/auth/reset-password/?code=${resetToken}`;
   try {
-    // TODO Send email with reset url
+    const resetToken = user.createPasswordResetToken();
+    const resetUrl = `http://localhost:3001/users/auth/reset-password/?code=${resetToken}`;
+    await user.save({ validateBeforeSave: false });
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "Reset Password Request",
+        text: `We have received password request if you have not sent that ignore this  email other click following link ${resetUrl}`,
+      });
+    } catch (error) {
+      return next(
+        new ErrorResponse(`Error sending mail : ${error.message}`, 500)
+      );
+    }
     res.status(200).json({
       success: true,
       message: "Reset Password link send to email",
@@ -183,7 +216,7 @@ export const forgotPassword = async (req, res, next) => {
 export const resetPassword = async (req, res, next) => {
   const hashedToken = crypto
     .createHash("sha256")
-    .update(req.params.token)
+    .update(req.body.token)
     .digest("hex");
 
   const user = await User.findOne({
@@ -198,19 +231,27 @@ export const resetPassword = async (req, res, next) => {
 
   // update user password and set resetToken to be undefined
 
-  user.password = req.body.password;
-  user.passwordConfirm = req.body.confirmPassword;
+  try {
+    user.password = req.body.password;
+    user.passwordConfirm = req.body.confirmPassword;
 
-  user.passwordResetToken = undefined;
-  user.passwordResetExpires = undefined;
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
 
-  await user.save();
-
-  // TODO => send email to user for confirmation of reset password
-
-  res.status(200).json({
-    status: "success",
-    message: "Password Reseted Successfully",
-    token: generateToken(user._id),
-  });
+    await sendEmail({
+      to: user.email,
+      subject: "Reset Password Confirmation",
+      text: `Updated your password successfully`,
+    });
+    res.status(200).json({
+      status: "success",
+      message: "Password Reseted Successfully",
+      token: generateToken(user._id),
+    });
+  } catch (error) {
+    return next(
+      new ErrorResponse(`Error sending mail : ${error.message}`, 500)
+    );
+  }
 };
