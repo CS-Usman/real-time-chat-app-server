@@ -26,7 +26,7 @@ export const login = async (req, res, next) => {
       message: "User login successful",
       token: generateToken(foundUser._id),
       data: {
-        _id: foundUser._id,
+        userId: foundUser._id,
       },
     });
   } catch (error) {
@@ -142,6 +142,9 @@ export const verifyOTP = async (req, res, next) => {
     return res.status(400).json({
       status: "error",
       message: "Email is invalid or OTP expired",
+      data: {
+        userId: user._id
+      }
     });
   }
 
