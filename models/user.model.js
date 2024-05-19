@@ -68,8 +68,8 @@ export const userSchema = mongoose.Schema(
     ],
     status: {
       type: String,
-      enum: ["Online", "Offline"]
-    }
+      enum: ["Online", "Offline"],
+    },
   },
   { timestamps: true }
 );
@@ -102,7 +102,15 @@ userSchema.methods.createPasswordResetToken = function () {
 };
 
 userSchema.methods.changedPasswordAfter = function (JWTTimeStamp) {
-  return JWTTimeStamp < this.passwordChangedAt;
+  if (this.passwordChangedAt) {
+    const changedTimeStamp = parseInt(
+      this.passwordChangedAt.getTime() / 1000,
+      10
+    );
+
+    return JWTTimeStamp < changedTimeStamp;
+  }
+  return false;
 };
 
 userSchema.pre("save", async function (next) {

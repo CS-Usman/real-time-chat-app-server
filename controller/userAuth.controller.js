@@ -142,9 +142,6 @@ export const verifyOTP = async (req, res, next) => {
     return res.status(400).json({
       status: "error",
       message: "Email is invalid or OTP expired",
-      data: {
-        userId: user._id
-      }
     });
   }
 

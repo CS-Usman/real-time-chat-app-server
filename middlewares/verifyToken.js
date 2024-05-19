@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken";
 import ErrorResponse from "../utils/errorResponse.js";
 import "dotenv/config";
 import User from "../models/user.model.js";
-import promisify from "util";
+import { promisify } from "util";
 
 const verifyToken = async (req, res, next) => {
   let token;
@@ -30,7 +30,7 @@ const verifyToken = async (req, res, next) => {
 
   // 3) Check if user still exists
 
-  const this_user = await User.findById(decoded.userId);
+  const this_user = await User.findById(decoded.id);
   if (!this_user) {
     return next(
       new ErrorResponse(
